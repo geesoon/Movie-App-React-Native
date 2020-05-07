@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { SearchBar, Button } from "react-native-elements";
 import axios from "axios";
 import {
@@ -8,39 +8,57 @@ import {
   Keyboard,
   Image,
   FlatList,
-  TouchableHighlight,
+  TouchableNativeFeedback,
   Modal,
   ScrollView,
-  Dimensions,
+  Dimensions
 } from "react-native";
 
-import Header from "./components/Header";
 import Colors from "./contants/color";
 
 const WIDTH = Dimensions.get("window").width;
 
 export default function App() {
   const [userInput, setUserInput] = useState("");
-  const [isLoading, setLoading] = useState(true);
+  const [userChoice, setUserChoice] = useState("");
   const [result, setResult] = useState([]);
   const [resultDetail, setResultDetail] = useState([]);
   const [resultDetailVisible, setResultDetailVisible] = useState(false);
-  const [noResultView, setNoResultView] = useState(true);
+  const [noResultView, setNoResultView] = useState(null);
 
   const apiurl = "http://www.omdbapi.com/?apikey=28f4dae9&type=movie";
+
+  const resetScreen = () => {
+    Keyboard.dismiss();
+    setUserInput("");
+    setUserChoice("");
+    setResult("");
+    setResultDetail("");
+    setNoResultView(null);
+    setResultDetailVisible(false);
+  }
+
+  const addUserChoice = () => {
+    setUserChoice(userInput);
+  }
 
   const searchInputHandler = (searchInput) => {
     setUserInput(searchInput);
   };
 
   const sendSearchRequest = () => {
+    setNoResultView(null);
+    addUserChoice();
     Keyboard.dismiss();
     axios(apiurl + "&s=" + userInput)
       .then(({ data }) => {
-        setResult(data.Search);
+        setResult(data);
+        if (data.Response == 'True')
+          setNoResultView(false);
+        else
+          setNoResultView(true);
       })
       .catch((error) => console.error(error))
-      .finally(() => setLoading(false));
     setUserInput('');
   };
 
@@ -58,7 +76,11 @@ export default function App() {
 
   return (
     <View style={styles.screen}>
-      <Header />
+      <View style={styles.header}>
+        <TouchableNativeFeedback onPress={resetScreen}>
+          <Text style={styles.headerTitle}>MOVIE LOOKUP</Text>
+        </TouchableNativeFeedback>
+      </View>
       <View>
         <SearchBar
           lightTheme={true}
@@ -81,7 +103,6 @@ export default function App() {
           placeholder="Search here..."
           onChangeText={searchInputHandler}
           value={userInput}
-          showLoading={true}
           searchIcon={
             <Button
               buttonStyle={styles.searchButton}
@@ -95,67 +116,91 @@ export default function App() {
           }
         />
       </View>
-      <View>
-        <Text>
-          Result for : {userInput}
-        </Text>
-      </View>
-
-      <View>
-        <FlatList
-          keyExtractor={(item, index) => item.imdbID}
-          data={result}
-          renderItem={({ item }) => (
-            <TouchableHighlight underlayColor={Colors.primary} onPress={() => openPopup(item.imdbID)}>
-              <View style={styles.resultContainer}>
-                <Image
-                  source={{ uri: item.Poster }}
-                  style={styles.resultImageContainer}
-                  resizeMode="cover"
-                />
-                <Text style={styles.resultText}>{item.Title}</Text>
-                <Text style={styles.resultText}>{item.Year}</Text>
-              </View>
-            </TouchableHighlight>
-          )}
-          numColumns={2}
-        />
+      <View style={{ flex: 1 }}>
+        {userChoice == "" ?
+          (<Text>Search something now...</Text>) :
+          noResultView ?
+            (<View>
+              <Text>No result for {userChoice}</Text>
+            </View>) :
+            (<View style={{ flex: 1 }}>
+              <FlatList
+                ListHeaderComponent={
+                  <View>
+                    <Text>
+                      Result for : {userChoice}
+                    </Text>
+                  </View>}
+                keyExtractor={(item, index) => item.imdbID}
+                data={result.Search}
+                renderItem={({ item }) => (
+                  <TouchableNativeFeedback onPress={() => openPopup(item.imdbID)}>
+                    <View style={styles.resultContainer}>
+                      <Image
+                        source={{ uri: item.Poster }}
+                        style={styles.resultImageContainer}
+                        resizeMode="cover"
+                      />
+                      <Text style={styles.resultText}>{item.Title}</Text>
+                      <Text style={styles.resultText}>{item.Year}</Text>
+                    </View>
+                  </TouchableNativeFeedback>
+                )}
+                numColumns={2}
+              />
+            </View>)
+        }
       </View>
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={false}
         visible={resultDetailVisible}
       >
-        <ScrollView>
+        <ScrollView contentContainerStyle={styles.resultDetailScreen}>
           <Image
             source={{ uri: resultDetail.Poster }}
             style={styles.resultDetailImage}
             resizeMode="contain"
           />
           <View style={styles.resultDetailContainer}>
-            <View style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: 'row', flexWrap: "wrap" }}>
               <Text style={styles.resultDetailTitle}>{resultDetail.Title} </Text>
               <Text style={styles.resultDetailYear}>{resultDetail.Year}</Text>
             </View>
             <View style={{ marginVertical: 10 }}>
               <Text style={styles.resultDetailText}>Genre: {resultDetail.Genre}</Text>
-              <Text style={styles.resultDetailIMDB}>
+              <Text style={styles.resultDetailImdb}>
                 IMDb {resultDetail.imdbRating}
               </Text>
             </View>
             <Text style={styles.resultDetailText}>{resultDetail.Plot}</Text>
           </View>
-          <View style={styles.closeBtn}>
-            <Button title="CLOSE" onPress={closeBtn} />
-          </View>
         </ScrollView>
+        <View style={styles.closeBtn}>
+          <Button title="CLOSE" onPress={closeBtn} />
+        </View>
       </Modal>
     </View >
   );
 }
 
 const styles = StyleSheet.create({
+  header: {
+    width: "100%",
+    backgroundColor: Colors.accent,
+    paddingTop: 30,
+    paddingLeft: 10,
+    margin: 10,
+    justifyContent: "flex-start",
+  },
+  headerTitle: {
+    color: Colors.primary,
+    fontSize: 30,
+    fontWeight: "bold",
+    textAlign: "left",
+  },
   screen: {
+    flex: 1,
     width: WIDTH,
     padding: 10,
     alignItems: "center",
@@ -190,7 +235,7 @@ const styles = StyleSheet.create({
     padding: 10,
     margin: 10,
     justifyContent: "space-evenly",
-    alignItems: "flex-start"
+    alignItems: "flex-start",
   },
   resultDetailImage: {
     width: WIDTH,
@@ -199,11 +244,12 @@ const styles = StyleSheet.create({
   resultDetailTitle: {
     fontWeight: "bold",
     fontSize: 20,
+    marginRight: 5,
   },
   resultDetailYear: {
     fontSize: 20,
   },
-  resultDetailIMDB: {
+  resultDetailImdb: {
     color: 'green',
     textAlign: "justify",
   },
@@ -212,6 +258,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   closeBtn: {
-    padding: 10,
+    width: WIDTH,
+    paddingLeft: 15,
+    paddingRight: 15,
+    paddingBottom: 5,
   },
 });
